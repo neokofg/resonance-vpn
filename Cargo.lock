@@ -1935,6 +1935,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "resonance-daemon"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "log",
+ "resonance-tun",
+ "resonance-vpn-lib",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "resonance-proto"
 version = "0.1.0"
 dependencies = [
