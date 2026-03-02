@@ -67,6 +67,12 @@ async fn main() -> anyhow::Result<()> {
             if let Err(e) = tun_write.write(&ip_packet).await {
                 log::error!("TUN write error: {e}");
             }
+            // Drain all immediately available packets without blocking
+            while let Ok((_src_ip, ip_packet)) = tun_rx.try_recv() {
+                if let Err(e) = tun_write.write(&ip_packet).await {
+                    log::error!("TUN write error: {e}");
+                }
+            }
         }
     });
 

@@ -123,7 +123,7 @@ pub async fn run_forwarding(
     let mut encoder = FrameEncoder::new(result.keys.clone());
     let mut decoder = FrameDecoder::new(result.keys);
 
-    // TUN -> WS writer
+    // TUN -> WS writer (with batching: feed all available packets, then flush once)
     let tun_read = tun.clone();
     let mut shutdown_w = shutdown.clone();
     let write_handle = tokio::spawn(async move {
@@ -136,7 +136,7 @@ pub async fn run_forwarding(
                             match encoder.encode_data(&buf[..n]) {
                                 Ok(frame_data) => {
                                     if ws_write
-                                        .send(WsMessage::Binary(frame_data))
+                                        .feed(WsMessage::Binary(frame_data))
                                         .await
                                         .is_err()
                                     {
@@ -147,6 +147,41 @@ pub async fn run_forwarding(
                                     log::error!("Encode error: {e}");
                                     break;
                                 }
+                            }
+
+                            // Drain all immediately available packets without waiting
+                            let mut failed = false;
+                            loop {
+                                match tun_read.try_read(&mut buf) {
+                                    Ok(n) if n > 0 => {
+                                        match encoder.encode_data(&buf[..n]) {
+                                            Ok(frame_data) => {
+                                                if ws_write
+                                                    .feed(WsMessage::Binary(frame_data))
+                                                    .await
+                                                    .is_err()
+                                                {
+                                                    failed = true;
+                                                    break;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!("Encode error: {e}");
+                                                failed = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    _ => break,
+                                }
+                            }
+                            if failed {
+                                break;
+                            }
+
+                            // Single flush for all buffered packets
+                            if ws_write.flush().await.is_err() {
+                                break;
                             }
                         }
                         Ok(_) => {}
