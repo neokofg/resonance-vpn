@@ -24,4 +24,5 @@ hyper = { version = "1", features = ["http2", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 clap = { version = "4", features = ["derive"] }
-fastrand = "2"
+getrandom = { workspace = true }
+subtle = { workspace = true }

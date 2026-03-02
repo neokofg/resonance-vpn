@@ -53,8 +53,9 @@ pub fn chrome_tls_config() -> anyhow::Result<boring::ssl::ConnectConfiguration> 
         SslOptions::NO_SSLV2 | SslOptions::NO_SSLV3 | SslOptions::NO_COMPRESSION,
     );
 
-    // Accept server certificates (in production, load system CA bundle)
-    builder.set_verify(SslVerifyMode::NONE);
+    // Verify server certificates using system CA store
+    builder.set_default_verify_paths()?;
+    builder.set_verify(SslVerifyMode::PEER);
 
     let connector = builder.build();
     let config = connector.configure()?;

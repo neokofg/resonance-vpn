@@ -6,23 +6,25 @@ use tokio::net::TcpStream;
 use tokio::sync::watch;
 
 use tokio_tungstenite::tungstenite::Message as WsMessage;
+use tokio_tungstenite::WebSocketStream;
 
 use resonance_proto::crypto::{self, SessionKeys};
 use resonance_proto::frame::{self, Frame, FrameDecoder, FrameEncoder};
 use resonance_proto::proto;
 use resonance_tun::TunDevice;
 
-pub struct ConnectResult {
+type WsStream = WebSocketStream<tokio_boring::SslStream<TcpStream>>;
+
+pub struct HandshakeResult {
     pub assigned_ip: String,
     pub session_id: String,
+    ws_stream: WsStream,
+    keys: SessionKeys,
 }
 
-pub async fn connect_and_run(
-    server: &str,
-    psk: &str,
-    tun: Arc<TunDevice>,
-    mut shutdown: watch::Receiver<bool>,
-) -> anyhow::Result<ConnectResult> {
+/// Phase 1: TCP → TLS → WS → Auth → ServerHello.
+/// Returns immediately after handshake without entering any forwarding loop.
+pub async fn handshake(server: &str, psk: &str) -> anyhow::Result<HandshakeResult> {
     let addr = if server.contains(':') {
         server.to_string()
     } else {
@@ -52,6 +54,10 @@ pub async fn connect_and_run(
                 "Sec-WebSocket-Key",
                 tokio_tungstenite::tungstenite::handshake::client::generate_key(),
             )
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
             .body(())
             .unwrap(),
         tls_stream,
@@ -92,14 +98,30 @@ pub async fn connect_and_run(
         hello.assigned_ip
     );
 
-    let result = ConnectResult {
-        assigned_ip: hello.assigned_ip.clone(),
-        session_id: hello.session_id.clone(),
-    };
-
     let keys = SessionKeys::derive(&hello.key_material);
-    let mut encoder = FrameEncoder::new(keys.clone());
-    let mut decoder = FrameDecoder::new(keys);
+
+    let ws_stream = ws_write
+        .reunite(ws_read)
+        .map_err(|_| anyhow::anyhow!("Failed to reunite WebSocket stream"))?;
+
+    Ok(HandshakeResult {
+        assigned_ip: hello.assigned_ip,
+        session_id: hello.session_id,
+        ws_stream,
+        keys,
+    })
+}
+
+/// Phase 2: Bidirectional TUN ↔ WS forwarding with keepalive.
+pub async fn run_forwarding(
+    result: HandshakeResult,
+    tun: Arc<TunDevice>,
+    mut shutdown: watch::Receiver<bool>,
+) -> anyhow::Result<()> {
+    let (mut ws_write, mut ws_read) = result.ws_stream.split();
+
+    let mut encoder = FrameEncoder::new(result.keys.clone());
+    let mut decoder = FrameDecoder::new(result.keys);
 
     // TUN -> WS writer
     let tun_read = tun.clone();
@@ -181,5 +203,5 @@ pub async fn connect_and_run(
     }
 
     write_handle.abort();
-    Ok(result)
+    Ok(())
 }

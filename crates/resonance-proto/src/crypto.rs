@@ -2,12 +2,13 @@ use blake3::Hasher as Blake3Hasher;
 use hkdf::Hkdf;
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const SESSION_SALT: &[u8] = b"resonance-vpn-v1";
 const SCRAMBLE_KEY_LABEL: &[u8] = b"scramble";
 const MAC_KEY_LABEL: &[u8] = b"mac";
 
-#[derive(Clone)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SessionKeys {
     pub scramble_key: [u8; 32],
     pub mac_key: [u8; 32],

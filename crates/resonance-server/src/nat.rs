@@ -49,6 +49,19 @@ pub fn setup_nat(tun_name: &str, subnet: &str) -> anyhow::Result<()> {
         anyhow::bail!("Failed to add iptables FORWARD ESTABLISHED rule");
     }
 
+    // TCP MSS clamping to avoid fragmentation through the tunnel
+    let status = Command::new("iptables")
+        .args([
+            "-t", "mangle", "-A", "FORWARD",
+            "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
+            "-o", tun_name,
+            "-j", "TCPMSS", "--clamp-mss-to-pmtu",
+        ])
+        .status()?;
+    if !status.success() {
+        log::warn!("Failed to add TCP MSS clamping rule (non-fatal)");
+    }
+
     log::info!("NAT setup complete for {tun_name}");
     Ok(())
 }
@@ -84,6 +97,14 @@ pub fn cleanup_nat(tun_name: &str, subnet: &str) {
             "RELATED,ESTABLISHED",
             "-j",
             "ACCEPT",
+        ])
+        .status();
+    let _ = Command::new("iptables")
+        .args([
+            "-t", "mangle", "-D", "FORWARD",
+            "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
+            "-o", tun_name,
+            "-j", "TCPMSS", "--clamp-mss-to-pmtu",
         ])
         .status();
     log::info!("NAT cleanup complete");

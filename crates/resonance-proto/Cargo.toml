@@ -11,6 +11,7 @@ subtle = { workspace = true }
 bytes = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
+zeroize = { workspace = true }
 
 [build-dependencies]
 prost-build = "0.13"

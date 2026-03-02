@@ -498,6 +498,17 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "wasi",
+]
+
+[[package]]
+name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
@@ -1092,6 +1103,7 @@ dependencies = [
  "sha2",
  "subtle",
  "thiserror 2.0.18",
+ "zeroize",
 ]
 
 [[package]]
@@ -1104,8 +1116,8 @@ dependencies = [
  "bytes",
  "clap",
  "env_logger",
- "fastrand",
  "futures-util",
+ "getrandom 0.2.17",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -1114,6 +1126,7 @@ dependencies = [
  "resonance-proto",
  "resonance-tun",
  "serde",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tokio-boring",
@@ -1905,6 +1918,26 @@ name = "zerocopy-derive"
 version = "0.8.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f65c489a7071a749c849713807783f70672b28094011623e200cb86dcb835953"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "zeroize"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
+dependencies = [
+ "zeroize_derive",
+]
+
+[[package]]
+name = "zeroize_derive"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85a5b4158499876c763cb03bc4e49185d3cccbabb15b33c627f7884f43db852e"
 dependencies = [
  "proc-macro2",
  "quote",

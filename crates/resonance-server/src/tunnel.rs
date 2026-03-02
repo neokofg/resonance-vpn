@@ -5,6 +5,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message;
+use subtle::ConstantTimeEq;
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 
@@ -14,7 +15,7 @@ use resonance_proto::proto;
 
 pub struct ClientSession {
     pub assigned_ip: Ipv4Addr,
-    pub tx: mpsc::UnboundedSender<Bytes>,
+    pub tx: mpsc::Sender<Bytes>,
 }
 
 pub type SessionMap = Arc<RwLock<HashMap<Ipv4Addr, ClientSession>>>;
@@ -22,6 +23,7 @@ pub type SessionMap = Arc<RwLock<HashMap<Ipv4Addr, ClientSession>>>;
 pub struct IpPool {
     next: u32,
     max: u32,
+    released: Vec<u32>,
 }
 
 impl IpPool {
@@ -32,10 +34,14 @@ impl IpPool {
         Self {
             next: base + 2,
             max: max - 1,
+            released: Vec::new(),
         }
     }
 
     pub fn allocate(&mut self) -> Option<Ipv4Addr> {
+        if let Some(ip) = self.released.pop() {
+            return Some(Ipv4Addr::from(ip));
+        }
         if self.next > self.max {
             return None;
         }
@@ -44,8 +50,8 @@ impl IpPool {
         Some(ip)
     }
 
-    pub fn release(&mut self, _ip: Ipv4Addr) {
-        // Simple pool for 1-5 users
+    pub fn release(&mut self, ip: Ipv4Addr) {
+        self.released.push(u32::from(ip));
     }
 }
 
@@ -54,7 +60,7 @@ pub async fn handle_client<S>(
     psk_hash: [u8; 32],
     sessions: SessionMap,
     ip_pool: Arc<tokio::sync::Mutex<IpPool>>,
-    tun_tx: mpsc::UnboundedSender<(Ipv4Addr, Bytes)>,
+    tun_tx: mpsc::Sender<(Ipv4Addr, Bytes)>,
 ) where
     S: futures_util::Stream<Item = Result<WsMessage, tokio_tungstenite::tungstenite::Error>>
         + futures_util::Sink<WsMessage, Error = tokio_tungstenite::tungstenite::Error>
@@ -89,7 +95,9 @@ pub async fn handle_client<S>(
         }
     };
 
-    if auth_req.psk_hash.len() != 32 || auth_req.psk_hash[..] != psk_hash[..] {
+    if auth_req.psk_hash.len() != 32
+        || !bool::from(auth_req.psk_hash.ct_eq(&psk_hash[..]))
+    {
         log::warn!("Auth failed: invalid PSK");
         let err = proto::Error {
             message: "Invalid PSK".to_string(),
@@ -110,9 +118,17 @@ pub async fn handle_client<S>(
     };
 
     let mut key_material = [0u8; 32];
-    fastrand::fill(&mut key_material);
+    if getrandom::getrandom(&mut key_material).is_err() {
+        log::error!("Failed to generate key material");
+        return;
+    }
 
-    let session_id = format!("{:016x}", fastrand::u64(..));
+    let mut session_bytes = [0u8; 8];
+    if getrandom::getrandom(&mut session_bytes).is_err() {
+        log::error!("Failed to generate session ID");
+        return;
+    }
+    let session_id = format!("{:016x}", u64::from_le_bytes(session_bytes));
 
     let hello = proto::ServerHello {
         session_id: session_id.clone(),
@@ -135,7 +151,8 @@ pub async fn handle_client<S>(
     let mut encoder = FrameEncoder::new(keys.clone());
     let mut decoder = FrameDecoder::new(keys);
 
-    let (client_tx, mut client_rx) = mpsc::unbounded_channel::<Bytes>();
+    let (client_tx, mut client_rx) = mpsc::channel::<Bytes>(256);
+    let (ctrl_tx, mut ctrl_rx) = mpsc::channel::<Bytes>(16);
 
     {
         let mut sessions_w = sessions.write().await;
@@ -149,21 +166,35 @@ pub async fn handle_client<S>(
     }
 
     let write_handle = tokio::spawn(async move {
-        while let Some(ip_packet) = client_rx.recv().await {
-            match encoder.encode_data(&ip_packet) {
-                Ok(frame_data) => {
+        loop {
+            tokio::select! {
+                Some(ip_packet) = client_rx.recv() => {
+                    match encoder.encode_data(&ip_packet) {
+                        Ok(frame_data) => {
+                            if ws_write
+                                .send(WsMessage::Binary(frame_data))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Encode error: {e}");
+                            break;
+                        }
+                    }
+                }
+                Some(ctrl_frame) = ctrl_rx.recv() => {
                     if ws_write
-                        .send(WsMessage::Binary(frame_data))
+                        .send(WsMessage::Binary(ctrl_frame))
                         .await
                         .is_err()
                     {
                         break;
                     }
                 }
-                Err(e) => {
-                    log::error!("Encode error: {e}");
-                    break;
-                }
+                else => break,
             }
         }
     });
@@ -172,13 +203,18 @@ pub async fn handle_client<S>(
         match msg_result {
             Ok(WsMessage::Binary(data)) => match decoder.decode(&data) {
                 Ok(Frame::Data(ip_packet)) => {
-                    if tun_tx.send((assigned_ip, ip_packet)).is_err() {
+                    if tun_tx.send((assigned_ip, ip_packet)).await.is_err() {
                         break;
                     }
                 }
                 Ok(Frame::Control(payload)) => {
                     if let Ok(ping) = proto::Ping::decode(payload) {
-                        log::debug!("Ping from {assigned_ip}: {}", ping.timestamp);
+                        let pong = proto::Pong {
+                            timestamp: ping.timestamp,
+                        };
+                        let pong_frame =
+                            FrameEncoder::encode_control(&pong.encode_to_vec());
+                        let _ = ctrl_tx.send(Bytes::from(pong_frame));
                     }
                 }
                 Err(e) => {

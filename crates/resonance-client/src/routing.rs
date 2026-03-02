@@ -31,6 +31,22 @@ impl RoutingState {
                 .join("\n");
             std::fs::write("/etc/resolv.conf", format!("{resolv}\n"))?;
             log::info!("DNS set to: {}", dns.join(", "));
+
+            // Block DNS outside the tunnel to prevent leaks
+            let _ = run_cmd(
+                "iptables",
+                &[
+                    "-I", "OUTPUT", "-p", "udp", "--dport", "53",
+                    "!", "-o", tun_name, "-j", "DROP",
+                ],
+            );
+            let _ = run_cmd(
+                "iptables",
+                &[
+                    "-I", "OUTPUT", "-p", "tcp", "--dport", "53",
+                    "!", "-o", tun_name, "-j", "DROP",
+                ],
+            );
         }
 
         let _ = assigned_ip; // reserved for future use
@@ -45,6 +61,22 @@ impl RoutingState {
     }
 
     pub fn cleanup(&self) {
+        // Remove DNS leak prevention rules
+        let _ = run_cmd(
+            "iptables",
+            &[
+                "-D", "OUTPUT", "-p", "udp", "--dport", "53",
+                "!", "-o", &self.tun_name, "-j", "DROP",
+            ],
+        );
+        let _ = run_cmd(
+            "iptables",
+            &[
+                "-D", "OUTPUT", "-p", "tcp", "--dport", "53",
+                "!", "-o", &self.tun_name, "-j", "DROP",
+            ],
+        );
+
         let _ = run_cmd("ip", &["route", "del", &self.server_ip]);
         let _ = run_cmd(
             "ip",

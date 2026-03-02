@@ -84,34 +84,38 @@ async fn connect(server: &str, psk: &str, dns: &[String]) -> anyhow::Result<()> 
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
+    // Phase 1: Handshake — no TUN needed yet
+    let handshake = tunnel::handshake(server, psk).await?;
+    log::info!("Connected! Assigned IP: {}", handshake.assigned_ip);
+
+    // Phase 2: Create TUN with server-assigned IP
+    let assigned_ip: Ipv4Addr = handshake.assigned_ip.parse()?;
     let tun_name = "rvpn0";
     let tun = Arc::new(TunDevice::create(&TunConfig {
         name: tun_name.to_string(),
-        address: Ipv4Addr::new(10, 8, 0, 2),
+        address: assigned_ip,
         netmask: Ipv4Addr::new(255, 255, 255, 0),
         mtu: 1280,
     })?);
+    log::info!("TUN device {tun_name} created with IP {assigned_ip}");
 
-    log::info!("TUN device {tun_name} created");
-
-    let result = tokio::select! {
-        r = tunnel::connect_and_run(server, psk, tun.clone(), shutdown_rx) => r?,
-        _ = tokio::signal::ctrl_c() => {
-            log::info!("Interrupted");
-            let _ = shutdown_tx.send(true);
-            return Ok(());
-        }
-    };
-
-    log::info!("Connected! Assigned IP: {}", result.assigned_ip);
-
-    let _routing = routing::RoutingState::setup(server, &result.assigned_ip, tun_name, dns)?;
-
+    // Phase 3: Setup routing BEFORE forwarding starts
+    let _routing =
+        routing::RoutingState::setup(server, &handshake.assigned_ip, tun_name, dns)?;
     log::info!("VPN active. Press Ctrl+C to disconnect.");
 
-    tokio::signal::ctrl_c().await?;
-    log::info!("Disconnecting...");
-    let _ = shutdown_tx.send(true);
+    // Phase 4: Run forwarding with graceful shutdown
+    tokio::select! {
+        result = tunnel::run_forwarding(handshake, tun, shutdown_rx) => {
+            if let Err(e) = result {
+                log::error!("Forwarding error: {e}");
+            }
+        }
+        _ = tokio::signal::ctrl_c() => {
+            log::info!("Disconnecting...");
+            let _ = shutdown_tx.send(true);
+        }
+    }
 
     Ok(())
 }

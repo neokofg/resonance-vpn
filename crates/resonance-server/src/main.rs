@@ -9,7 +9,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use clap::Parser;
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc, Mutex, RwLock, Semaphore};
 use tokio_tungstenite::tungstenite::http;
 
 use resonance_proto::crypto;
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let sessions: SessionMap = Arc::new(RwLock::new(std::collections::HashMap::new()));
     let ip_pool = Arc::new(Mutex::new(IpPool::new(network_addr, prefix)));
 
-    let (tun_tx, mut tun_rx) = mpsc::unbounded_channel::<(Ipv4Addr, Bytes)>();
+    let (tun_tx, mut tun_rx) = mpsc::channel::<(Ipv4Addr, Bytes)>(1024);
 
     let tun_write = tun.clone();
     tokio::spawn(async move {
@@ -77,11 +77,11 @@ async fn main() -> anyhow::Result<()> {
         loop {
             match tun_read.read(&mut buf).await {
                 Ok(n) if n > 0 => {
-                    if n >= 20 {
+                    if n >= 20 && (buf[0] >> 4) == 4 {
                         let dst_ip = Ipv4Addr::new(buf[16], buf[17], buf[18], buf[19]);
                         let sessions_r = sessions_reader.read().await;
                         if let Some(session) = sessions_r.get(&dst_ip) {
-                            let _ = session.tx.send(Bytes::copy_from_slice(&buf[..n]));
+                            let _ = session.tx.send(Bytes::copy_from_slice(&buf[..n])).await;
                         }
                     }
                 }
@@ -109,6 +109,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let _fake_html = Arc::new(fake_html);
 
+    let conn_limit = Arc::new(Semaphore::new(64));
+
     let subnet = config.subnet.clone();
     let tun_name = config.tun_name.clone();
     let shutdown = tokio::signal::ctrl_c();
@@ -131,8 +133,16 @@ async fn main() -> anyhow::Result<()> {
                 let sessions = sessions.clone();
                 let ip_pool = ip_pool.clone();
                 let tun_tx = tun_tx.clone();
+                let conn_limit = conn_limit.clone();
 
                 tokio::spawn(async move {
+                    let _permit = match conn_limit.try_acquire() {
+                        Ok(p) => p,
+                        Err(_) => {
+                            log::warn!("Connection limit reached, rejecting {peer_addr}");
+                            return;
+                        }
+                    };
                     let tls_stream = match tokio_boring::accept(&tls_acceptor, tcp_stream).await {
                         Ok(s) => s,
                         Err(e) => {
