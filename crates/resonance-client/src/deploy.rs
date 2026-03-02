@@ -288,6 +288,15 @@ async fn install_deps(session: &SshSession, needs_certbot: bool) -> anyhow::Resu
 }
 
 async fn download_server_binary(session: &SshSession, arch: &str) -> anyhow::Result<()> {
+    // Check if binary is already installed (e.g. uploaded manually)
+    let existing = session
+        .exec(&format!("test -x {INSTALL_DIR}/resonance-server"))
+        .await?;
+    if existing.exit_code == 0 {
+        log::info!("Server binary already present at {INSTALL_DIR}/resonance-server, skipping download.");
+        return Ok(());
+    }
+
     log::info!("Downloading server binary ({arch})...");
 
     let asset = format!("resonance-vpn-{arch}.tar.gz");
@@ -296,7 +305,8 @@ async fn download_server_binary(session: &SshSession, arch: &str) -> anyhow::Res
     session
         .exec_ok(&format!("curl -fsSL '{url}' -o /tmp/{asset}"))
         .await
-        .context("Failed to download server binary from GitHub Releases")?;
+        .context("Failed to download server binary from GitHub Releases. \
+                  You can manually upload it to /usr/local/bin/resonance-server and re-run deploy.")?;
 
     session
         .exec_ok(&format!("tar xzf /tmp/{asset} -C /tmp/"))
