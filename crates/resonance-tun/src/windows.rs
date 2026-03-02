@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use crate::{TunConfig, TunError, Result};
 
 pub struct TunDevice {
-    session: wintun::Session,
+    session: Arc<wintun::Session>,
     name: String,
 }
 
@@ -38,7 +40,7 @@ impl TunDevice {
         log::info!("TUN device {} created", config.name);
 
         Ok(Self {
-            session,
+            session: Arc::new(session),
             name: config.name.clone(),
         })
     }
@@ -50,12 +52,12 @@ impl TunDevice {
     pub async fn read(&self, buf: &mut [u8]) -> Result<usize> {
         let session = self.session.clone();
         let max_len = buf.len();
-        let packet = tokio::task::spawn_blocking(move || {
+        let packet: wintun::Packet = tokio::task::spawn_blocking(move || {
             session.receive_blocking()
         })
         .await
-        .map_err(|e| TunError::Tun(e.to_string()))?
-        .map_err(|e| TunError::Tun(e.to_string()))?;
+        .map_err(|e: tokio::task::JoinError| TunError::Tun(e.to_string()))?
+        .map_err(|e: wintun::Error| TunError::Tun(e.to_string()))?;
 
         let len = packet.bytes().len().min(max_len);
         buf[..len].copy_from_slice(&packet.bytes()[..len]);
@@ -68,12 +70,12 @@ impl TunDevice {
         tokio::task::spawn_blocking(move || {
             let mut packet = session
                 .allocate_send_packet(data.len() as u16)
-                .map_err(|e| TunError::Tun(e.to_string()))?;
+                .map_err(|e: wintun::Error| TunError::Tun(e.to_string()))?;
             packet.bytes_mut().copy_from_slice(&data);
             session.send_packet(packet);
             Ok::<usize, TunError>(data.len())
         })
         .await
-        .map_err(|e| TunError::Tun(e.to_string()))?
+        .map_err(|e: tokio::task::JoinError| TunError::Tun(e.to_string()))?
     }
 }
