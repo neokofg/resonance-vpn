@@ -129,6 +129,31 @@ impl TunDevice {
         }
     }
 
+    /// Non-blocking read. Returns Ok(0) if no data available.
+    pub fn try_read(&self, buf: &mut [u8]) -> Result<usize> {
+        let mut full_buf = vec![0u8; buf.len() + 4];
+        match self.fd.try_io(tokio::io::Interest::READABLE, |inner| {
+            let fd = inner.as_raw_fd();
+            let n = unsafe {
+                libc::read(fd, full_buf.as_mut_ptr() as *mut _, full_buf.len())
+            };
+            if n < 0 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(n as usize)
+            }
+        }) {
+            Ok(n) if n > 4 => {
+                let payload_len = n - 4;
+                buf[..payload_len].copy_from_slice(&full_buf[4..n]);
+                Ok(payload_len)
+            }
+            Ok(_) => Ok(0),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
+            Err(e) => Err(TunError::Io(e)),
+        }
+    }
+
     pub async fn write(&self, buf: &[u8]) -> Result<usize> {
         let af: u32 = if !buf.is_empty() && (buf[0] >> 4) == 6 {
             libc::AF_INET6 as u32

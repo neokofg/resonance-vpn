@@ -172,7 +172,7 @@ pub async fn handle_client<S>(
                     match encoder.encode_data(&ip_packet) {
                         Ok(frame_data) => {
                             if ws_write
-                                .send(WsMessage::Binary(frame_data))
+                                .feed(WsMessage::Binary(frame_data))
                                 .await
                                 .is_err()
                             {
@@ -183,6 +183,35 @@ pub async fn handle_client<S>(
                             log::error!("Encode error: {e}");
                             break;
                         }
+                    }
+
+                    // Drain all immediately available packets without blocking
+                    let mut failed = false;
+                    while let Ok(pkt) = client_rx.try_recv() {
+                        match encoder.encode_data(&pkt) {
+                            Ok(frame_data) => {
+                                if ws_write
+                                    .feed(WsMessage::Binary(frame_data))
+                                    .await
+                                    .is_err()
+                                {
+                                    failed = true;
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Encode error: {e}");
+                                failed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if failed {
+                        break;
+                    }
+
+                    if ws_write.flush().await.is_err() {
+                        break;
                     }
                 }
                 Some(ctrl_frame) = ctrl_rx.recv() => {

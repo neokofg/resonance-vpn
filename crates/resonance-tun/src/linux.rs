@@ -89,6 +89,25 @@ impl TunDevice {
         }
     }
 
+    /// Non-blocking read. Returns Ok(0) if no data available.
+    pub fn try_read(&self, buf: &mut [u8]) -> Result<usize> {
+        match self.fd.try_io(tokio::io::Interest::READABLE, |inner| {
+            let fd = inner.as_raw_fd();
+            let n = unsafe {
+                libc::read(fd, buf.as_mut_ptr() as *mut _, buf.len())
+            };
+            if n < 0 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(n as usize)
+            }
+        }) {
+            Ok(n) => Ok(n),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
+            Err(e) => Err(TunError::Io(e)),
+        }
+    }
+
     pub async fn write(&self, buf: &[u8]) -> Result<usize> {
         loop {
             let mut guard = self.fd.writable().await.map_err(TunError::Io)?;
