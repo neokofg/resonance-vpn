@@ -1,0 +1,12 @@
+listen = "0.0.0.0:443"
+tun_name = "rvpn0"
+subnet = "10.8.0.0/24"
+dns = ["1.1.1.1", "8.8.8.8"]
+psk = "change-me-to-a-strong-secret"
+
+[tls]
+cert = "/etc/resonance/cert.pem"
+key = "/etc/resonance/key.pem"
+
+[fake_site]
+root = "/var/www/resonance"
