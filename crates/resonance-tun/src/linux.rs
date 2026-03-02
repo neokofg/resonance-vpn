@@ -23,7 +23,7 @@ pub struct TunDevice {
 impl TunDevice {
     pub fn create(config: &TunConfig) -> Result<Self> {
         let fd = unsafe {
-            let fd = libc::open(b"/dev/net/tun\0".as_ptr() as *const _, libc::O_RDWR);
+            let fd = libc::open(c"/dev/net/tun".as_ptr(), libc::O_RDWR);
             if fd < 0 {
                 return Err(TunError::Io(std::io::Error::last_os_error()));
             }

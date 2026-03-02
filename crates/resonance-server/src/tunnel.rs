@@ -214,7 +214,7 @@ pub async fn handle_client<S>(
                         };
                         let pong_frame =
                             FrameEncoder::encode_control(&pong.encode_to_vec());
-                        let _ = ctrl_tx.send(Bytes::from(pong_frame));
+                        let _ = ctrl_tx.send(pong_frame).await;
                     }
                 }
                 Err(e) => {
