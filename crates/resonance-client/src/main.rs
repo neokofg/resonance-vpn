@@ -1,4 +1,5 @@
 mod config;
+mod deploy;
 mod routing;
 mod tls;
 mod tunnel;
@@ -33,6 +34,41 @@ enum Commands {
 
         #[arg(short = 'f', long, default_value = "~/.config/resonance/client.toml")]
         config: String,
+    },
+
+    /// Deploy resonance-server to a remote host via SSH
+    Deploy {
+        /// Remote host IP or hostname
+        #[arg(long)]
+        host: String,
+
+        /// SSH username
+        #[arg(long, default_value = "root")]
+        user: String,
+
+        /// Path to SSH private key file
+        #[arg(long, group = "auth")]
+        ssh_key: Option<String>,
+
+        /// SSH password
+        #[arg(long, group = "auth")]
+        password: Option<String>,
+
+        /// SSH port
+        #[arg(long, default_value_t = 22)]
+        ssh_port: u16,
+
+        /// Domain name for Let's Encrypt TLS (omit for self-signed)
+        #[arg(long)]
+        domain: Option<String>,
+
+        /// Server listen port
+        #[arg(long, default_value_t = 443)]
+        port: u16,
+
+        /// VPN subnet
+        #[arg(long, default_value = "10.8.0.0/24")]
+        subnet: String,
     },
 }
 
@@ -73,6 +109,28 @@ async fn main() -> anyhow::Result<()> {
             };
 
             connect(&server, &psk, &dns_servers).await?;
+        }
+        Commands::Deploy {
+            host,
+            user,
+            ssh_key,
+            password,
+            ssh_port,
+            domain,
+            port,
+            subnet,
+        } => {
+            deploy::run(deploy::DeployOpts {
+                host,
+                user,
+                ssh_key,
+                password,
+                ssh_port,
+                domain,
+                port,
+                subnet,
+            })
+            .await?;
         }
     }
 

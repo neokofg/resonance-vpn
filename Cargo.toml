@@ -23,6 +23,8 @@ toml = "0.8"
 anyhow = "1"
 zeroize = { version = "1", features = ["derive"] }
 getrandom = "0.2"
+russh = "0.54"
+ssh-key = { version = "0.6", features = ["ed25519", "rsa"] }
 
 [profile.release]
 lto = true
