@@ -29,6 +29,9 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             name: darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: windows-amd64
 
     runs-on: ${{ matrix.os }}
 
@@ -51,6 +54,10 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         run: brew install cmake go protobuf
 
+      - name: Install dependencies (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: choco install cmake golang strawberryperl nasm protoc --yes --no-progress
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -66,7 +73,16 @@ jobs:
       - name: Build client
         run: cargo build --release --target ${{ matrix.target }} -p resonance-client
 
-      - name: Package
+      - name: Download wintun.dll (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.wintun.net/builds/wintun-0.14.1.zip" -OutFile wintun.zip
+          Expand-Archive -Path wintun.zip -DestinationPath wintun
+          Copy-Item wintun/wintun/bin/amd64/wintun.dll -Destination .
+
+      - name: Package (Unix)
+        if: "!startsWith(matrix.os, 'windows')"
         run: |
           mkdir -p dist
           if [ -f target/${{ matrix.target }}/release/resonance-server ]; then
@@ -76,6 +92,16 @@ jobs:
           cp config.example.toml dist/ 2>/dev/null || true
           cd dist
           tar czf ../resonance-vpn-${{ matrix.name }}.tar.gz *
+
+      - name: Package (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item "target/${{ matrix.target }}/release/resonance-client.exe" dist/
+          Copy-Item wintun.dll dist/
+          if (Test-Path config.example.toml) { Copy-Item config.example.toml dist/ }
+          Compress-Archive -Path dist/* -DestinationPath "resonance-vpn-${{ matrix.name }}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
