@@ -121,5 +121,12 @@ async fn connect(server: &str, psk: &str, dns: &[String]) -> anyhow::Result<()> 
 }
 
 fn dirs_home() -> String {
-    std::env::var("HOME").unwrap_or_else(|_| "/root".to_string())
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME").unwrap_or_else(|_| "/root".to_string())
+    }
 }
