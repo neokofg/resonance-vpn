@@ -1926,26 +1926,12 @@ name = "resonance-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "blake3",
- "boring",
- "bytes",
  "clap",
  "env_logger",
- "futures-util",
- "getrandom 0.2.17",
- "h2",
- "http",
  "log",
- "prost",
- "resonance-proto",
  "resonance-tun",
- "russh",
- "serde",
- "thiserror 2.0.18",
+ "resonance-vpn-lib",
  "tokio",
- "tokio-boring",
- "tokio-tungstenite",
- "toml",
 ]
 
 [[package]]
@@ -2000,6 +1986,31 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "wintun",
+]
+
+[[package]]
+name = "resonance-vpn-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "boring",
+ "bytes",
+ "futures-util",
+ "getrandom 0.2.17",
+ "h2",
+ "http",
+ "log",
+ "prost",
+ "resonance-proto",
+ "resonance-tun",
+ "russh",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-boring",
+ "tokio-tungstenite",
+ "toml",
 ]
 
 [[package]]

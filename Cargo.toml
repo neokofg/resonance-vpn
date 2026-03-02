@@ -5,6 +5,7 @@ members = [
     "crates/resonance-tun",
     "crates/resonance-server",
     "crates/resonance-client",
+    "crates/resonance-vpn-lib",
 ]
 
 [workspace.dependencies]

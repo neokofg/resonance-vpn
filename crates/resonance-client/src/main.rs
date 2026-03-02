@@ -1,8 +1,4 @@
-mod config;
-mod deploy;
-mod routing;
-mod tls;
-mod tunnel;
+use resonance_vpn_lib::{config, deploy, routing, tunnel};
 
 use std::net::Ipv4Addr;
 use std::sync::Arc;
@@ -85,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
             dns,
             config: config_path,
         } => {
-            let config_path = config_path.replace('~', &dirs_home());
+            let config_path = config_path.replace('~', &resonance_vpn_lib::dirs_home());
             let file_config = config::Config::load(&config_path).ok();
 
             let server = server
@@ -176,15 +172,4 @@ async fn connect(server: &str, psk: &str, dns: &[String]) -> anyhow::Result<()> 
     }
 
     Ok(())
-}
-
-fn dirs_home() -> String {
-    #[cfg(windows)]
-    {
-        std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string())
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("HOME").unwrap_or_else(|_| "/root".to_string())
-    }
 }
