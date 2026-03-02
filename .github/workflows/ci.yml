@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake golang-go
+        run: sudo apt-get update && sudo apt-get install -y cmake golang-go protobuf-compiler
 
       - uses: dtolnay/rust-toolchain@stable
 

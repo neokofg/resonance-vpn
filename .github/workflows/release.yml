@@ -43,7 +43,7 @@ jobs:
 
       - name: Install dependencies (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y cmake golang-go perl
+        run: sudo apt-get update && sudo apt-get install -y cmake golang-go perl protobuf-compiler
 
       - name: Install cross-compilation deps (aarch64-linux)
         if: matrix.cross
@@ -55,7 +55,12 @@ jobs:
 
       - name: Install dependencies (macOS)
         if: startsWith(matrix.os, 'macos')
-        run: brew install cmake go
+        run: brew install cmake go protobuf
+
+      - name: Install protoc (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: choco install protoc -y
 
       - uses: dtolnay/rust-toolchain@stable
         with:
