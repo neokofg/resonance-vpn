@@ -64,6 +64,19 @@ impl TunDevice {
         Ok(len)
     }
 
+    /// Non-blocking read. Returns Ok(0) if no data available.
+    pub fn try_read(&self, buf: &mut [u8]) -> Result<usize> {
+        match self.session.try_receive() {
+            Ok(Some(packet)) => {
+                let len = packet.bytes().len().min(buf.len());
+                buf[..len].copy_from_slice(&packet.bytes()[..len]);
+                Ok(len)
+            }
+            Ok(None) => Ok(0),
+            Err(e) => Err(TunError::Tun(e.to_string())),
+        }
+    }
+
     pub async fn write(&self, buf: &[u8]) -> Result<usize> {
         let session = self.session.clone();
         let data = buf.to_vec();
