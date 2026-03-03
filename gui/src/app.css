@@ -1,0 +1,55 @@
+:root {
+  --bg: #050709;
+  --bg-secondary: #0B0E14;
+  --bg-tertiary: #111620;
+  --bg-elevated: #161C28;
+
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --surface-active: rgba(255, 255, 255, 0.08);
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.10);
+  --border-active: rgba(255, 255, 255, 0.14);
+
+  --accent: #00DFA2;
+  --accent-soft: rgba(0, 223, 162, 0.10);
+  --accent-medium: rgba(0, 223, 162, 0.20);
+  --accent-glow: rgba(0, 223, 162, 0.35);
+
+  --error: #FF5C5C;
+  --error-soft: rgba(255, 92, 92, 0.10);
+  --error-glow: rgba(255, 92, 92, 0.30);
+
+  --warning: #FFB347;
+
+  --text: #E4E9F2;
+  --text-secondary: #6B7A94;
+  --text-muted: #3A4558;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  user-select: none;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 2px; }

@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/resonance-proto",
+    "crates/resonance-tun",
+    "crates/resonance-server",
+    "crates/resonance-vpn-lib",
+    "crates/resonance-daemon",
+]
+exclude = [
+    "gui/src-tauri",
+]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+blake3 = "1"
+hkdf = "0.12"
+sha2 = "0.10"
+subtle = "2"
+bytes = "1"
+prost = "0.13"
+log = "0.4"
+env_logger = "0.11"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+serde_json = "1"
+zeroize = { version = "1", features = ["derive"] }
+getrandom = "0.2"
+russh = "0.54"
+ssh-key = { version = "0.6", features = ["ed25519", "rsa"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = 3
+
+[profile.release.package."*"]
+opt-level = 3

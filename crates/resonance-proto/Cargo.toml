@@ -1,0 +1,17 @@
+[package]
+name = "resonance-proto"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+blake3 = { workspace = true }
+hkdf = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+bytes = { workspace = true }
+prost = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true }
+
+[build-dependencies]
+prost-build = "0.13"
