@@ -146,12 +146,7 @@ pub async fn handle_client<S>(
 
     {
         let mut sessions_w = sessions.write().await;
-        sessions_w.insert(
-            assigned_ip,
-            ClientSession {
-                tx: client_tx,
-            },
-        );
+        sessions_w.insert(assigned_ip, ClientSession { tx: client_tx });
     }
 
     let write_handle = tokio::spawn(async move {

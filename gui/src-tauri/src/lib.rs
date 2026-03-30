@@ -1,12 +1,23 @@
 mod daemon;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use daemon::DaemonManager;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use tokio::sync::Mutex;
 
 type DaemonState = Arc<Mutex<DaemonManager>>;
+
+#[derive(Default)]
+pub struct StatsState {
+    pub tx_bytes: AtomicU64,
+    pub rx_bytes: AtomicU64,
+    pub tx_packets: AtomicU64,
+    pub rx_packets: AtomicU64,
+}
+
+type SharedStats = Arc<StatsState>;
 
 #[tauri::command]
 async fn connect_vpn(
@@ -35,6 +46,24 @@ async fn get_vpn_status(state: tauri::State<'_, DaemonState>) -> Result<(), Stri
     let mut daemon = state.lock().await;
     let request = serde_json::json!({ "method": "status" });
     daemon.send(&request.to_string())
+}
+
+#[derive(Serialize)]
+struct StatsResponse {
+    tx_bytes: u64,
+    rx_bytes: u64,
+    tx_packets: u64,
+    rx_packets: u64,
+}
+
+#[tauri::command]
+fn get_stats(stats: tauri::State<'_, SharedStats>) -> StatsResponse {
+    StatsResponse {
+        tx_bytes: stats.tx_bytes.load(Ordering::Relaxed),
+        rx_bytes: stats.rx_bytes.load(Ordering::Relaxed),
+        tx_packets: stats.tx_packets.load(Ordering::Relaxed),
+        rx_packets: stats.rx_packets.load(Ordering::Relaxed),
+    }
 }
 
 #[derive(Deserialize)]
@@ -79,12 +108,14 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(Mutex::new(DaemonManager::new())) as DaemonState)
+        .manage(Arc::new(StatsState::default()) as SharedStats)
         .setup(|app| {
             let state = app.state::<DaemonState>().inner().clone();
+            let stats = app.state::<SharedStats>().inner().clone();
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut daemon = state.lock().await;
-                if let Err(e) = daemon.start(&handle) {
+                if let Err(e) = daemon.start(&handle, stats) {
                     log::error!("Failed to start daemon: {e}");
                 }
             });
@@ -96,6 +127,7 @@ pub fn run() {
             connect_vpn,
             disconnect_vpn,
             get_vpn_status,
+            get_stats,
             deploy_server,
         ])
         .run(tauri::generate_context!())

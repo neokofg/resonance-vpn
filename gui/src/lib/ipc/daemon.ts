@@ -49,6 +49,17 @@ export async function getVpnStatus() {
   return invoke('get_vpn_status');
 }
 
+export interface StatsData {
+  tx_bytes: number;
+  rx_bytes: number;
+  tx_packets: number;
+  rx_packets: number;
+}
+
+export async function getStats(): Promise<StatsData> {
+  return invoke<StatsData>('get_stats');
+}
+
 export interface DeployParams {
   host: string;
   user: string;

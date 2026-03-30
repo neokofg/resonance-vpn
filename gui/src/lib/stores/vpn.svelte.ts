@@ -1,4 +1,4 @@
-import { onDaemonEvent, initDaemonListener, type VpnState, type DaemonEvent } from '$lib/ipc/daemon';
+import { onDaemonEvent, initDaemonListener, getStats, type VpnState, type DaemonEvent } from '$lib/ipc/daemon';
 
 class VpnStore {
   state = $state<VpnState>('disconnected');
@@ -11,6 +11,7 @@ class VpnStore {
   rxBytes = $state(0);
 
   private uptimeInterval: ReturnType<typeof setInterval> | null = null;
+  private statsInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     initDaemonListener();
@@ -23,9 +24,11 @@ class VpnStore {
       this.error = event.error ?? null;
       if (this.state === 'connected') {
         this.startUptimeCounter();
+        this.startStatsPolling();
         this.fetchPublicIp();
       } else if (this.state === 'disconnected') {
         this.stopUptimeCounter();
+        this.stopStatsPolling();
         this.assignedIp = null;
         this.publicIp = null;
         this.sessionId = null;
@@ -45,10 +48,6 @@ class VpnStore {
         this.state = 'error';
       }
     }
-    if (event.type === 'stats') {
-      this.txBytes = event.tx_bytes ?? 0;
-      this.rxBytes = event.rx_bytes ?? 0;
-    }
   }
 
   private async fetchPublicIp() {
@@ -60,6 +59,21 @@ class VpnStore {
     } catch {
       this.publicIp = null;
     }
+  }
+
+  private startStatsPolling() {
+    this.stopStatsPolling();
+    this.statsInterval = setInterval(async () => {
+      try {
+        const s = await getStats();
+        this.txBytes = s.tx_bytes;
+        this.rxBytes = s.rx_bytes;
+      } catch { /* ignore */ }
+    }, 1000);
+  }
+
+  private stopStatsPolling() {
+    if (this.statsInterval) { clearInterval(this.statsInterval); this.statsInterval = null; }
   }
 
   private startUptimeCounter() {

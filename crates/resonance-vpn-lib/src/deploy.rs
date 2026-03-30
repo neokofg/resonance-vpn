@@ -299,7 +299,7 @@ async fn download_server_binary(session: &SshSession, arch: &str) -> anyhow::Res
 
     log::info!("Downloading server binary ({arch})...");
 
-    let asset = format!("resonance-vpn-{arch}.tar.gz");
+    let asset = format!("resonance-{arch}.tar.gz");
     let url = format!("https://github.com/{GITHUB_REPO}/releases/latest/download/{asset}");
 
     session

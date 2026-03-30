@@ -1,12 +1,15 @@
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Stdio;
+use std::sync::atomic::Ordering;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
+
+use crate::SharedStats;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -50,7 +53,7 @@ impl DaemonManager {
         }
     }
 
-    pub fn start(&mut self, app: &AppHandle) -> Result<(), String> {
+    pub fn start(&mut self, app: &AppHandle, stats: SharedStats) -> Result<(), String> {
         if self.child.is_some() {
             return Ok(());
         }
@@ -128,6 +131,12 @@ impl DaemonManager {
                 }
                 match serde_json::from_str::<DaemonEvent>(&line) {
                     Ok(daemon_event) => {
+                        if let DaemonEvent::Stats { tx_bytes, rx_bytes, tx_packets, rx_packets } = &daemon_event {
+                            stats.tx_bytes.store(*tx_bytes, Ordering::Relaxed);
+                            stats.rx_bytes.store(*rx_bytes, Ordering::Relaxed);
+                            stats.tx_packets.store(*tx_packets, Ordering::Relaxed);
+                            stats.rx_packets.store(*rx_packets, Ordering::Relaxed);
+                        }
                         log::info!("[daemon->gui] {:?}", daemon_event);
                         let _ = app_handle.emit("daemon-event", &daemon_event);
                     }
